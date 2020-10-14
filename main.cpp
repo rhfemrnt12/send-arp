@@ -88,7 +88,7 @@ int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
 	while (true) {
 		send_packet(my_ip, my_mac, you_ip, you_mac, ARPOP_REQUEST);
   	    struct pcap_pkthdr* header;
-  	    const u_char* req_packet;
+  	    const u_char* rep_packet;
    	    int res = pcap_next_ex(handle, &header, &req_packet);
   	    if (res == 0) continue;
   	    if (res == -1 || res == -2) {
@@ -100,8 +100,8 @@ int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
 		EthArpPacket request_packet;
 		EthArpPacket reply_packet;
 
-		memcpy(&request_packet, req_packet, (size_t)sizeof(EthArpPacket));
-		memcpy(&reply_packet, reinterpret_cast<const u_char*>(&packet),(size_t)sizeof(EthArpPacket));
+		memcpy(&reply_packet, rep_packet, (size_t)sizeof(EthArpPacket));
+		memcpy(&request_packet, reinterpret_cast<const u_char*>(&packet),(size_t)sizeof(EthArpPacket));
 
 		if((reply_packet.arp_.sip_==request_packet.arp_.tip_)&&(reply_packet.arp_.tip_==request_packet.arp_.sip_)&&(reply_packet.arp_.tmac_==request_packet.arp_.smac_)){
 			*you_mac=(*reply_packet.arp_.smac_);
