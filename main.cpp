@@ -52,10 +52,10 @@ void convrt_mac( const char *data, char *cvrt_str, int sz )
      strncpy( cvrt_str, buf, sz );
 }
 
-pcap_t *handle = NULL;
 EthArpPacket packet;
+pcap_t *handle = NULL;
 
-void send_packet(char *my_ip, char *my_mac, char *you_ip, char *you_mac, uint8_t op)
+int send_packet(char *my_ip, char *my_mac, char *you_ip, char *you_mac, uint8_t op)
 {
 	if(op==ARPOP_REQUEST){
 		packet.eth_.dmac_ = Mac("ff:ff:ff:ff:ff:ff");
@@ -80,7 +80,9 @@ void send_packet(char *my_ip, char *my_mac, char *you_ip, char *you_mac, uint8_t
 	int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&packet), sizeof(EthArpPacket));
 	if (res != 0) {
 		fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+		return -1;
 	}
+	//else printf("send packet success!\n");
 }
 
 int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
@@ -89,7 +91,7 @@ int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
 		send_packet(my_ip, my_mac, you_ip, you_mac, ARPOP_REQUEST);
   	    struct pcap_pkthdr* header;
   	    const u_char* rep_packet;
-   	    int res = pcap_next_ex(handle, &header, &req_packet);
+   	    int res = pcap_next_ex(handle, &header, &rep_packet);
   	    if (res == 0) continue;
   	    if (res == -1 || res == -2) {
  	      printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
@@ -103,12 +105,12 @@ int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
 		memcpy(&reply_packet, rep_packet, (size_t)sizeof(EthArpPacket));
 		memcpy(&request_packet, reinterpret_cast<const u_char*>(&packet),(size_t)sizeof(EthArpPacket));
 
-		if((reply_packet.arp_.sip_==request_packet.arp_.tip_)&&(reply_packet.arp_.tip_==request_packet.arp_.sip_)&&(reply_packet.arp_.tmac_==request_packet.arp_.smac_)){
-			*you_mac=(*reply_packet.arp_.smac_);
-			printf("you_mac = %s\n",you_mac);
-			return 1;
-		}
-		else continue;
+        if((reply_packet.arp_.sip_==request_packet.arp_.tip_)&&(reply_packet.arp_.tip_==request_packet.arp_.sip_)&&(reply_packet.arp_.tmac_==request_packet.arp_.smac_)){
+            memcpy(you_mac, reply_packet.arp_.smac_, 6);
+            printf("you mac add : %s\n", you_mac);
+            return 1;
+        }
+        else continue;
 	}
 }
 
@@ -178,7 +180,7 @@ int main(int argc, char* argv[]){
 	}
 	char* dev = argv[1];
 	char errbuf[PCAP_ERRBUF_SIZE];
-	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+	pcap_t *handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
 	if (handle == nullptr) {
 		fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
 		return -1;
