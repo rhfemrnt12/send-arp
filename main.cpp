@@ -30,7 +30,6 @@ void usage() {
 
 #define REQ_CNT 20
 
-char *you_mac;
 
 void convrt_mac( const char *data, char *cvrt_str, int sz )
 {
@@ -52,10 +51,10 @@ void convrt_mac( const char *data, char *cvrt_str, int sz )
      strncpy( cvrt_str, buf, sz );
 }
 
-EthArpPacket packet;
 pcap_t *handle = NULL;
+EthArpPacket packet;
 
-int send_packet(char *my_ip, char *my_mac, char *you_ip, char *you_mac, uint8_t op)
+int send_packet(char *my_ip, char *my_mac, char *you_ip, u_char *you_mac, uint8_t op)
 {
 	if(op==ARPOP_REQUEST){
 		packet.eth_.dmac_ = Mac("ff:ff:ff:ff:ff:ff");
@@ -82,10 +81,9 @@ int send_packet(char *my_ip, char *my_mac, char *you_ip, char *you_mac, uint8_t 
 		fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
 		return -1;
 	}
-	//else printf("send packet success!\n");
 }
 
-int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
+int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, u_char *you_mac)
 {
 	while (true) {
 		send_packet(my_ip, my_mac, you_ip, you_mac, ARPOP_REQUEST);
@@ -105,17 +103,17 @@ int leak_you_mac(char *my_ip, char *my_mac, char *you_ip, char *you_mac)
 		memcpy(&reply_packet, rep_packet, (size_t)sizeof(EthArpPacket));
 		memcpy(&request_packet, reinterpret_cast<const u_char*>(&packet),(size_t)sizeof(EthArpPacket));
 
-        if((reply_packet.arp_.sip_==request_packet.arp_.tip_)&&(reply_packet.arp_.tip_==request_packet.arp_.sip_)&&(reply_packet.arp_.tmac_==request_packet.arp_.smac_)){
-            memcpy(you_mac, reply_packet.arp_.smac_, 6);
-            printf("you mac add : %s\n", you_mac);
-            return 1;
-        }
-        else continue;
+		if((reply_packet.arp_.sip_==request_packet.arp_.tip_)&&(reply_packet.arp_.tip_==request_packet.arp_.sip_)&&(reply_packet.arp_.tmac_==request_packet.arp_.smac_)){
+			memcpy(you_mac, reply_packet.arp_.smac_, Mac::SIZE);
+			printf("you_mac = %s\n", you_mac);
+			return 1;
+		}
+		else continue;
 	}
 }
 
-char *my_ip;
-char *my_mac;
+char my_ip[20];
+char my_mac[20];
 char mac_adr[128];
 
 int ip_mac()
@@ -159,7 +157,7 @@ int ip_mac()
             continue;
 
         sock = (struct sockaddr_in *)&ifr_s->ifr_addr;
-		my_ip = inet_ntoa(sock->sin_addr);
+		strcpy(my_ip, inet_ntoa(sock->sin_addr));
         printf( "\n<IP address> - %s\n" , my_ip );
 
         if( ioctl( sockfd, SIOCGIFHWADDR, ifr_s ) < 0 ) {
@@ -167,7 +165,7 @@ int ip_mac()
             return -1;
         }
         convrt_mac( ether_ntoa((struct ether_addr *)(ifr_s->ifr_hwaddr.sa_data)), mac_adr, sizeof(mac_adr) -1 );
-        my_mac=mac_adr;
+        strcpy(my_mac,mac_adr);
 		printf( "<MAC address> - %s\n" , my_mac );
     }
 }
@@ -180,12 +178,13 @@ int main(int argc, char* argv[]){
 	}
 	char* dev = argv[1];
 	char errbuf[PCAP_ERRBUF_SIZE];
-	pcap_t *handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
 	if (handle == nullptr) {
 		fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
 		return -1;
 	}
-
+	u_char you_mac[6] = {0,};
+	char you_mac_s[] = "00:00:00:00:00:00";
 	char *you_ip;
 	char *target_ip;
 	if(ip_mac()==-1) {
