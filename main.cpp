@@ -184,7 +184,6 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 	u_char you_mac[6] = {0,};
-	char you_mac_s[] = "00:00:00:00:00:00";
 	char *you_ip;
 	char *target_ip;
 	if(ip_mac()==-1) {
